@@ -7,6 +7,7 @@
  */
 
 #include <avr/pgmspace.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -114,17 +115,24 @@ uint16_t morse_char2code(const char ch)
 	case '0' ... '9':
 		return pgm_read_word(&morse_code_num[ch - '0']);
 	default:
-		for (i = 0; ARRAY_SIZE(morse_code_other); i++)
+		for (i = 0; i < ARRAY_SIZE(morse_code_other); i++)
 			if (pgm_read_byte(&(morse_code_other[i].ch)) == ch)
 				return pgm_read_word(&(morse_code_other[i].code));
 	}
 
-	return 'e';			/* e == ERROR */
+	return (uint16_t)'e';			/* e == ERROR */
 }
 
-void morse_encode(const char ch, void (*encode) (const char, const uint16_t))
+bool morse_encode(const char ch, void (*encode) (const char, const uint16_t))
 {
-	encode(ch, morse_char2code(ch));
+	uint16_t code = morse_char2code(ch);
+
+	if ((uint16_t)'e' != code) {
+		encode(ch, code);
+		return true;
+	}
+
+	return false;
 }
 
 /* based on magic morse algorithm
@@ -133,13 +141,13 @@ static const char magic_morse[] PROGMEM =
 	"_EISH5ee0TNDB6-0"		//   0 - 15	e == ERROR
 	"00ARLw0000MGZ700"		//  16 - 31	w == WAIT
 	"000UF0000i0KC000"		//  32 - 47	i == INVITE
-	"000WP000000O0800"		//  48 - 63
+	"000WP000000O08:0"		//  48 - 63
 	"0000Vu]00000X/00"		//  64 - 79	u == UNDERSTOOD  ] == End Of Work
 	"00000+.00000Q000"		//  80 - 95
 	"000000?00000Y()0"		//  96 - 111	() == Left/Right hand bracket
 	"0000J0000000e900"		// 112 - 127
 	"000004(c) M.R=BU"		// 128 - 143
-	"RNETTE'0000000,0"		// 144 - 159	' @ [150] should be "
+	"RNETTE\"0000000,0"		// 144 - 159	' @ [150] should be "
 	"00>0000000000[00"		// 160 - 175	[ == Starting Signal
 	"000000@000000000"		// 176 - 191
 	"0000030000000000"		// 192 - 207
@@ -159,13 +167,23 @@ char morse_code2char(const uint16_t code)
 	for (i = 0U; i < (0x00FF & code); i++, mask >>= 1U)
 		idx += (code & mask) ? 8U << i : 0U;
 
+	if (ARRAY_SIZE(magic_morse) - 1 <= idx)
+		return '\0';
+
 	return pgm_read_byte(&magic_morse[idx]);
 }
 
-void morse_decode(const uint16_t code,
+bool morse_decode(const uint16_t code,
 		  void (*decode) (const uint16_t, const char))
 {
-	decode(code, morse_code2char(code));
+	char ch = morse_code2char(code);
+
+	if (ch) {
+		decode(code, ch);
+		return true;
+	}
+
+	return false;
 }
 
 #if 0	/* sample codes */
